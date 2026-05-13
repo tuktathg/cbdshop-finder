@@ -1,7 +1,7 @@
 // ── Config ──────────────────────────────────────────────
 const SHEET_ID  = '1sKiG1H1Cn9zSSXQzenhAm8theiEJf4_RlcxxcXwiK6I';
 const GID       = '271631235';
-const CSV_URL   = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${GID}`;
+const CSV_URL   = 'https://script.google.com/macros/s/AKfycbz582jLMD1nWvJp_e0DS-VGHtjldtyxVBEU8tA8jizw9bGt3IZQSY99Z4MpDkphgBkzrg/exec';
 const OSRM_URL  = 'https://router.project-osrm.org/table/v1/driving';
 const BATCH     = 100;
 const driveCache = {};
@@ -126,7 +126,7 @@ async function fetchSheet(retry = 3) {
   for (let attempt = 1; attempt <= retry; attempt++) {
     try {
       showLoadBar(20 + attempt * 20);
-      const res = await fetch(CSV_URL + '&t=' + Date.now()); // bust cache
+      const res = await fetch(CSV_URL); // bust cache
       if (!res.ok) throw new Error('HTTP ' + res.status);
       const text = await res.text();
       if (!text || text.trim().startsWith('<')) throw new Error('ได้รับ HTML แทน CSV — Sheet อาจยังไม่ Public');
