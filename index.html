@@ -3,104 +3,105 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ค้นหาร้านค้าใกล้เคียง</title>
+  <title>ระบบค้นหาพิกัดใกล้เคียง</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
 
-  <header>
-    <div class="header-inner">
-      <div class="logo">
-        <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
-          <circle cx="14" cy="14" r="14" fill="#185FA5"/>
-          <path d="M14 6C10.68 6 8 8.68 8 12c0 4.5 6 10 6 10s6-5.5 6-10c0-3.32-2.68-6-6-6zm0 8a2 2 0 110-4 2 2 0 010 4z" fill="white"/>
-        </svg>
-        <span>ร้านค้าใกล้เคียง</span>
-      </div>
-      <div id="store-count-badge" class="badge hidden"></div>
+  <nav class="icon-bar">
+    <div class="icon-bar-logo">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
     </div>
-  </header>
+    <button class="icon-btn active" title="ค้นหา">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5"/></svg>
+    </button>
+    <button class="icon-btn" title="ค้นหาข้อความ">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    </button>
+    <button class="icon-btn" title="แจ้งเตือน">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+    </button>
+    <button class="icon-btn sidebar-toggle" title="ย่อ/ขยาย" onclick="toggleSidebar()">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" id="toggle-icon"><polyline points="15 18 9 12 15 6"/></svg>
+    </button>
+  </nav>
 
-  <main>
-    <div class="sidebar">
+  <div class="map-wrap">
+    <div class="map-header">
+      <span class="map-title">ระบบค้นหาพิกัดใกล้เคียง</span>
+      <span id="total-badge" class="total-badge hidden"></span>
+    </div>
+    <div id="map"></div>
+  </div>
 
-      <div class="card" id="card-data">
-        <div class="card-label">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h18v4H3zM3 10h18v4H3zM3 17h18v4H3z"/></svg>
-          ข้อมูลร้านค้า
-        </div>
-        <p class="hint">ดึงข้อมูลจาก Google Sheet (Sheet: Total_ร้าน)<br>คอลัม H = LAT, I = LONG</p>
-        <div class="btn-row">
-          <button id="btn-fetch" class="btn btn-primary" onclick="fetchSheet()">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
-            โหลดข้อมูล
-          </button>
-          <button class="btn" onclick="toggleManual()">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-            วาง CSV
-          </button>
-        </div>
-        <div id="load-bar" class="load-bar hidden"><div id="load-bar-inner"></div></div>
-        <div id="load-status" class="status-msg"></div>
-        <div id="manual-panel" class="hidden">
-          <p class="hint" style="margin-top:10px">File → Download → CSV แล้ว copy ทั้งหมดวางด้านล่าง</p>
-          <textarea id="csv-input" rows="4" placeholder="วาง CSV ที่นี่..."></textarea>
-          <button class="btn btn-primary" onclick="parseCSV()" style="margin-top:8px">โหลดจาก CSV</button>
-        </div>
+  <aside class="sidebar" id="sidebar">
+
+    <div class="sidebar-section">
+      <div class="section-header">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        ระบุตำแหน่งของคุณ
       </div>
+      <label class="input-label">พิกัด (Lat,Lng)</label>
+      <div class="coord-input-wrap">
+        <input type="text" id="coord-input" placeholder="13.6951042,100.4990..." />
+        <button class="coord-clear" onclick="clearCoord()">✕</button>
+      </div>
+      <div class="btn-group">
+        <button class="btn-search" onclick="searchFromInput()">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          ค้นหาพิกัด
+        </button>
+        <button class="btn-locate" onclick="useMyLocation()">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M1 12h4M19 12h4"/></svg>
+          ตำแหน่งปัจจุบัน
+        </button>
+      </div>
+      <div id="search-status" class="status-msg"></div>
+    </div>
 
-      <div class="card" id="card-search">
-        <div class="card-label">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="10" r="3"/><path d="M12 2a8 8 0 010 16c-4.5 0-8-4-8-8a8 8 0 018-8z"/></svg>
-          พิกัดของคุณ
-        </div>
-        <div class="input-row">
-          <div class="input-group">
-            <label>ละติจูด</label>
-            <input type="number" id="user-lat" step="0.000001" placeholder="18.7883" />
-          </div>
-          <div class="input-group">
-            <label>ลองจิจูด</label>
-            <input type="number" id="user-lng" step="0.000001" placeholder="98.9853" />
-          </div>
-        </div>
+    <div class="sidebar-section">
+      <div class="section-header clickable" onclick="toggleDataPanel()">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+        ข้อมูลร้านค้า
+        <span id="data-arrow" class="arrow">▾</span>
+        <span id="data-count-badge" class="mini-badge hidden"></span>
+      </div>
+      <div id="data-panel">
         <div class="radius-row">
-          <label>รัศมี</label>
+          <label>รัศมีค้นหา</label>
           <input type="range" id="radius-slider" min="1" max="100" value="10" step="1"
             oninput="document.getElementById('radius-out').textContent=this.value+' กม.'" />
           <span id="radius-out">10 กม.</span>
         </div>
-        <div class="btn-row" style="margin-top:12px">
-          <button class="btn btn-primary" onclick="findNearby()">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            ค้นหา
+        <div class="btn-row-small">
+          <button class="btn-sm btn-sm-primary" onclick="fetchSheet()">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
+            โหลด Google Sheet
           </button>
-          <button class="btn" onclick="useMyLocation()">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M1 12h4M19 12h4"/></svg>
-            ตำแหน่งปัจจุบัน
-          </button>
+          <button class="btn-sm" onclick="toggleManual()">วาง CSV</button>
         </div>
-        <div id="search-status" class="status-msg"></div>
-      </div>
-
-      <div id="results-card" class="card hidden">
-        <div class="card-label-row">
-          <div class="card-label" style="margin:0">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
-            ร้านค้าใกล้เคียง
-          </div>
-          <span id="result-count" class="result-count"></span>
+        <div id="load-bar" class="load-bar hidden"><div id="load-bar-inner"></div></div>
+        <div id="load-status" class="status-msg"></div>
+        <div id="manual-panel" class="hidden">
+          <textarea id="csv-input" rows="4" placeholder="วาง CSV ที่นี่..."></textarea>
+          <button class="btn-sm btn-sm-primary" onclick="parseCSV()" style="margin-top:6px">โหลดจาก CSV</button>
         </div>
-        <div id="store-list"></div>
       </div>
-
     </div>
 
-    <div class="map-container">
-      <div id="map"></div>
+    <div class="sidebar-section results-section" id="results-section" style="display:none">
+      <div class="section-header">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/></svg>
+        <span id="result-label">พิกัดในรัศมี</span>
+        <span id="result-count" class="result-count-badge"></span>
+      </div>
+      <div id="store-list"></div>
     </div>
-  </main>
+
+  </aside>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>

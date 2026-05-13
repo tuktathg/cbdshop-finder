@@ -1,30 +1,61 @@
-// ── Config ─────────────────────────────────────────────
+// ── Config ──────────────────────────────────────────────
 const SHEET_ID = '1sKiG1H1Cn9zSSXQzenhAm8theiEJf4_RlcxxcXwiK6I';
 const GID      = '271631235';
 const CSV_URL  = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${GID}`;
 
-const COLORS = ['#185FA5','#1D9E75','#993556','#BA7517','#534AB7','#3B6D11','#D85A30','#0F6E56','#3C3489'];
+// คอลัมน์ใน Sheet Total_ร้าน (0-indexed)
+// A=รหัสร้านที่ทำงาน, B=ประเภทร้าน, C=ชื่อร้าน, D=พื้นที่,
+// E=STATUS, F=อัตราจ้าง, G=วันทำงาน, H=เวลาทำงาน, I=LAT, J=LONG
+const COL = {
+  id:       0,  // A - รหัสร้านที่ทำงาน
+  type:     1,  // B - ประเภทร้าน
+  name:     2,  // C - ชื่อร้าน
+  area:     3,  // D - พื้นที่
+  status:   4,  // E - STATUS
+  wage:     5,  // F - อัตราจ้าง
+  workday:  6,  // G - วันทำงาน
+  worktime: 7,  // H - เวลาทำงาน
+  lat:      8,  // I - LAT
+  lng:      9,  // J - LONG
+};
 
-// ── State ───────────────────────────────────────────────
-let stores     = [];
+// ── State ────────────────────────────────────────────────
+let stores      = [];
 let mapInstance = null;
-let markers    = [];
+let markers     = [];
+let userMarker  = null;
+let sidebarOpen = true;
+let dataPanelOpen = true;
 let manualVisible = false;
 
-// ── UI helpers ──────────────────────────────────────────
-function setStatus(elId, msg, type) {
-  const el = document.getElementById(elId);
-  if (!el) return;
-  el.textContent = msg;
-  el.className = 'status-msg' + (type ? ' status-' + type : '');
+// ── Init ─────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+  initMap();
+  fetchSheet();
+});
+
+function initMap() {
+  mapInstance = L.map('map', { zoomControl: true }).setView([13.75, 100.5], 11);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© <a href="https://openstreetmap.org">Leaflet</a> | © <a href="https://openstreetmap.org">OpenStreetMap</a> contributors',
+    maxZoom: 19
+  }).addTo(mapInstance);
 }
 
-function showLoadBar(pct) {
-  const bar = document.getElementById('load-bar');
-  const inner = document.getElementById('load-bar-inner');
-  if (pct === null) { bar.classList.add('hidden'); return; }
-  bar.classList.remove('hidden');
-  inner.style.width = pct + '%';
+// ── Sidebar & panels ─────────────────────────────────────
+function toggleSidebar() {
+  sidebarOpen = !sidebarOpen;
+  const sb = document.getElementById('sidebar');
+  const icon = document.getElementById('toggle-icon');
+  sb.classList.toggle('collapsed', !sidebarOpen);
+  icon.style.transform = sidebarOpen ? '' : 'rotate(180deg)';
+  setTimeout(() => mapInstance && mapInstance.invalidateSize(), 320);
+}
+
+function toggleDataPanel() {
+  dataPanelOpen = !dataPanelOpen;
+  document.getElementById('data-panel').style.display = dataPanelOpen ? '' : 'none';
+  document.getElementById('data-arrow').classList.toggle('up', dataPanelOpen);
 }
 
 function toggleManual() {
@@ -32,118 +63,164 @@ function toggleManual() {
   document.getElementById('manual-panel').classList.toggle('hidden', !manualVisible);
 }
 
-// ── Data loading ────────────────────────────────────────
+// ── Helpers ──────────────────────────────────────────────
+function setStatus(id, msg, type) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = msg;
+  el.className = 'status-msg' + (type ? ' status-' + type : '');
+}
+
+function showLoadBar(pct) {
+  const bar = document.getElementById('load-bar');
+  if (pct === null) { bar.classList.add('hidden'); return; }
+  bar.classList.remove('hidden');
+  document.getElementById('load-bar-inner').style.width = pct + '%';
+}
+
+function formatDist(km) {
+  return km < 1 ? `${Math.round(km * 1000)} ม.` : `${km.toFixed(2)} กม.`;
+}
+
+function haversine(lat1, lng1, lat2, lng2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+function clearCoord() {
+  document.getElementById('coord-input').value = '';
+  setStatus('search-status', '', '');
+}
+
+// ── Fetch Sheet ──────────────────────────────────────────
 async function fetchSheet() {
-  const btn = document.getElementById('btn-fetch');
-  btn.disabled = true;
   showLoadBar(20);
   setStatus('load-status', 'กำลังดึงข้อมูล...', '');
-
   try {
     const res = await fetch(CSV_URL);
     showLoadBar(70);
-    if (!res.ok) throw new Error(`HTTP ${res.status} — ตรวจสอบว่า Sheet เปิดเป็น Public`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const text = await res.text();
     showLoadBar(100);
-    setTimeout(() => showLoadBar(null), 600);
-    processCSVText(text);
+    setTimeout(() => showLoadBar(null), 500);
+    processCSV(text);
   } catch (e) {
     showLoadBar(null);
     setStatus('load-status', `โหลดไม่ได้: ${e.message}`, 'err');
   }
-  btn.disabled = false;
 }
 
 function parseCSV() {
   const raw = document.getElementById('csv-input').value.trim();
   if (!raw) { setStatus('load-status', 'กรุณาวาง CSV ก่อน', 'warn'); return; }
-  processCSVText(raw);
+  processCSV(raw);
 }
 
-function processCSVText(text) {
+function processCSV(text) {
   const result = Papa.parse(text, { skipEmptyLines: true });
   const rows   = result.data;
-  if (rows.length < 2) { setStatus('load-status', 'ไม่พบข้อมูลในไฟล์', 'err'); return; }
+  if (rows.length < 2) { setStatus('load-status', 'ไม่พบข้อมูล', 'err'); return; }
 
+  // ตรวจสอบ header row เพื่อยืนยัน column mapping
   const header = rows[0];
-  let latCol = findCol(header, ['LAT','lat','Lat','latitude','LATITUDE']);
-  let lngCol = findCol(header, ['LONG','lng','Lng','LON','LONGITUDE','longitude']);
-  if (latCol === -1) latCol = 7;   // column H (0-indexed)
-  if (lngCol === -1) lngCol = 8;   // column I
+  console.log('Header:', header);
 
-  const nameCol     = findCol(header, ['ชื่อร้าน','ชื่อ','name','Name','SHOP']) ?? 1;
-  const typeCol     = findCol(header, ['ประเภท','type','Type','category','หมวดหมู่']);
-  const provCol     = findCol(header, ['จังหวัด','province','Province']);
-  const districtCol = findCol(header, ['อำเภอ','district','District']);
+  // ถ้า header ไม่ตรง fallback ไปหาชื่อคอลัมน์
+  let latCol  = header.findIndex(h => h && h.trim().toLowerCase() === 'lat');
+  let lngCol  = header.findIndex(h => h && h.trim().toLowerCase() === 'long');
+  if (latCol  === -1) latCol  = COL.lat;
+  if (lngCol  === -1) lngCol  = COL.lng;
+
+  let nameCol     = header.findIndex(h => h && h.trim() === 'ชื่อร้าน');
+  let typeCol     = header.findIndex(h => h && h.trim() === 'ประเภทร้าน');
+  let areaCol     = header.findIndex(h => h && h.trim() === 'พื้นที่');
+  let statusCol   = header.findIndex(h => h && h.trim() === 'STATUS');
+  let wageCol     = header.findIndex(h => h && h.trim() === 'อัตราจ้าง');
+  let workdayCol  = header.findIndex(h => h && h.trim() === 'วันทำงาน');
+  let worktimeCol = header.findIndex(h => h && h.trim() === 'เวลาทำงาน');
+  let idCol       = header.findIndex(h => h && h.trim() === 'รหัสร้านที่ทำงาน');
+
+  // fallback ถ้าหาชื่อไม่เจอ
+  if (nameCol     === -1) nameCol     = COL.name;
+  if (typeCol     === -1) typeCol     = COL.type;
+  if (areaCol     === -1) areaCol     = COL.area;
+  if (statusCol   === -1) statusCol   = COL.status;
+  if (wageCol     === -1) wageCol     = COL.wage;
+  if (workdayCol  === -1) workdayCol  = COL.workday;
+  if (worktimeCol === -1) worktimeCol = COL.worktime;
+  if (idCol       === -1) idCol       = COL.id;
 
   stores = [];
   let skipped = 0;
   for (let i = 1; i < rows.length; i++) {
-    const row = rows[i];
-    if (!row || row.length <= Math.max(latCol, lngCol)) { skipped++; continue; }
-    const lat = parseFloat(row[latCol]);
-    const lng = parseFloat(row[lngCol]);
+    const r = rows[i];
+    if (!r || r.length <= Math.max(latCol, lngCol)) { skipped++; continue; }
+    const lat = parseFloat(r[latCol]);
+    const lng = parseFloat(r[lngCol]);
     if (isNaN(lat) || isNaN(lng)) { skipped++; continue; }
     stores.push({
-      name:     (row[nameCol] || `ร้าน #${i}`).trim(),
+      id:       (r[idCol]       || '').trim(),
+      name:     (r[nameCol]     || `ร้าน #${i}`).trim(),
+      type:     (r[typeCol]     || '').trim(),
+      area:     (r[areaCol]     || '').trim(),
+      status:   (r[statusCol]   || '').trim(),
+      wage:     (r[wageCol]     || '-').trim(),
+      workday:  (r[workdayCol]  || '-').trim(),
+      worktime: (r[worktimeCol] || '-').trim(),
       lat, lng,
-      type:     typeCol !== -1     ? (row[typeCol]     || '').trim() : '',
-      province: provCol !== -1     ? (row[provCol]     || '').trim() : '',
-      district: districtCol !== -1 ? (row[districtCol] || '').trim() : '',
     });
   }
 
   if (stores.length === 0) {
-    setStatus('load-status', `ไม่พบแถวที่มีพิกัด (ตรวจสอบคอลัม H/I)`, 'err');
+    setStatus('load-status', 'ไม่พบแถวที่มีพิกัด (ตรวจสอบคอลัม LAT/LONG)', 'err');
     return;
   }
 
-  const msg = `โหลดสำเร็จ ${stores.length} ร้าน${skipped > 0 ? ` (ข้าม ${skipped} แถว)` : ''}`;
+  const msg = `โหลดสำเร็จ ${stores.length} ร้าน${skipped > 0 ? ` (ข้าม ${skipped})` : ''}`;
   setStatus('load-status', msg, 'ok');
 
-  const badge = document.getElementById('store-count-badge');
-  badge.textContent = `${stores.length} ร้านทั้งหมด`;
+  const badge = document.getElementById('total-badge');
+  badge.textContent = `ข้อมูลทั้งหมด ${stores.length} รายการ`;
   badge.classList.remove('hidden');
+
+  const mini = document.getElementById('data-count-badge');
+  mini.textContent = stores.length;
+  mini.classList.remove('hidden');
 }
 
-function findCol(header, candidates) {
-  for (const c of candidates) {
-    const idx = header.findIndex(h => h && h.trim().toLowerCase() === c.toLowerCase());
-    if (idx !== -1) return idx;
-  }
-  return -1;
-}
-
-// ── Geolocation ─────────────────────────────────────────
+// ── Location ─────────────────────────────────────────────
 function useMyLocation() {
   setStatus('search-status', 'กำลังขอตำแหน่ง GPS...', '');
   if (!navigator.geolocation) { setStatus('search-status', 'browser ไม่รองรับ GPS', 'err'); return; }
   navigator.geolocation.getCurrentPosition(
     pos => {
-      document.getElementById('user-lat').value = pos.coords.latitude.toFixed(6);
-      document.getElementById('user-lng').value = pos.coords.longitude.toFixed(6);
-      setStatus('search-status', `ได้ตำแหน่ง: ${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)}`, 'ok');
+      const lat = pos.coords.latitude.toFixed(7);
+      const lng = pos.coords.longitude.toFixed(7);
+      document.getElementById('coord-input').value = `${lat},${lng}`;
+      setStatus('search-status', `ได้ตำแหน่ง: ${lat}, ${lng}`, 'ok');
+      doSearch(parseFloat(lat), parseFloat(lng));
     },
-    err => setStatus('search-status', 'ไม่สามารถรับตำแหน่งได้: ' + err.message, 'err')
+    err => setStatus('search-status', 'ไม่สามารถรับตำแหน่ง: ' + err.message, 'err')
   );
 }
 
-// ── Search ──────────────────────────────────────────────
-function haversine(lat1, lng1, lat2, lng2) {
-  const R    = 6371;
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLng = (lng2 - lng1) * Math.PI / 180;
-  const a    = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+function searchFromInput() {
+  const val = document.getElementById('coord-input').value.trim();
+  if (!val) { setStatus('search-status', 'กรุณากรอกพิกัด', 'err'); return; }
+  const parts = val.split(',').map(s => parseFloat(s.trim()));
+  if (parts.length < 2 || isNaN(parts[0]) || isNaN(parts[1])) {
+    setStatus('search-status', 'รูปแบบพิกัดไม่ถูกต้อง เช่น 13.6951,100.4990', 'err');
+    return;
+  }
+  doSearch(parts[0], parts[1]);
 }
 
-function findNearby() {
-  const userLat = parseFloat(document.getElementById('user-lat').value);
-  const userLng = parseFloat(document.getElementById('user-lng').value);
-  const radius  = parseInt(document.getElementById('radius-slider').value);
-
-  if (isNaN(userLat) || isNaN(userLng)) { setStatus('search-status', 'กรุณากรอกพิกัดของคุณ', 'err'); return; }
-  if (stores.length === 0)               { setStatus('search-status', 'กรุณาโหลดข้อมูลร้านค้าก่อน', 'err'); return; }
+function doSearch(userLat, userLng) {
+  const radius = parseInt(document.getElementById('radius-slider').value);
+  if (stores.length === 0) { setStatus('search-status', 'กรุณาโหลดข้อมูลร้านค้าก่อน', 'err'); return; }
 
   const nearby = stores
     .map(s => ({ ...s, dist: haversine(userLat, userLng, s.lat, s.lng) }))
@@ -151,79 +228,101 @@ function findNearby() {
     .sort((a, b) => a.dist - b.dist);
 
   setStatus('search-status', `พบ ${nearby.length} ร้านในรัศมี ${radius} กม.`, nearby.length > 0 ? 'ok' : 'warn');
-  document.getElementById('result-count').textContent = `${nearby.length} ร้าน`;
-  document.getElementById('results-card').classList.remove('hidden');
 
-  renderMap(userLat, userLng, nearby);
+  document.getElementById('result-label').textContent = `พิกัดในรัศมี ${radius} กม.`;
+  document.getElementById('result-count').textContent = `${nearby.length} รายการ`;
+  document.getElementById('results-section').style.display = '';
+
+  renderUserMarker(userLat, userLng);
+  renderStoreMarkers(nearby);
   renderList(nearby);
-}
-
-// ── Map ─────────────────────────────────────────────────
-function renderMap(userLat, userLng, nearby) {
-  if (mapInstance) { mapInstance.remove(); mapInstance = null; }
-  mapInstance = L.map('map').setView([userLat, userLng], 12);
-
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '© <a href="https://openstreetmap.org">OpenStreetMap</a> contributors',
-    maxZoom: 19
-  }).addTo(mapInstance);
-
-  // User marker
-  const userIcon = L.divIcon({
-    html: `<div style="width:16px;height:16px;background:#E24B4A;border:2.5px solid white;border-radius:50%;box-shadow:0 0 0 4px rgba(226,75,74,0.22)"></div>`,
-    className: '', iconAnchor: [8, 8]
-  });
-  L.marker([userLat, userLng], { icon: userIcon })
-    .addTo(mapInstance)
-    .bindPopup('<b>📍 ตำแหน่งของคุณ</b>');
-
-  // Store markers
-  markers = nearby.map((s, i) => {
-    const color = COLORS[i % COLORS.length];
-    const icon  = L.divIcon({
-      html: `<div style="background:${color};color:white;border-radius:50%;width:26px;height:26px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;border:2.5px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.2)">${i+1}</div>`,
-      className: '', iconAnchor: [13, 13]
-    });
-    const dist    = formatDist(s.dist);
-    const popLines = [`<b>${s.name}</b>`, `📏 ${dist}`];
-    if (s.type)     popLines.push(`🏪 ${s.type}`);
-    if (s.province) popLines.push(`📌 ${s.province}${s.district ? ' › ' + s.district : ''}`);
-    return L.marker([s.lat, s.lng], { icon })
-      .addTo(mapInstance)
-      .bindPopup(popLines.join('<br>'));
-  });
 
   if (nearby.length > 0) {
-    const allPts = [[userLat, userLng], ...nearby.map(s => [s.lat, s.lng])];
-    mapInstance.fitBounds(L.latLngBounds(allPts), { padding: [36, 36] });
+    const bounds = L.latLngBounds([[userLat, userLng], ...nearby.map(s => [s.lat, s.lng])]);
+    mapInstance.fitBounds(bounds, { padding: [40, 40] });
+  } else {
+    mapInstance.setView([userLat, userLng], 13);
   }
-
-  setTimeout(() => mapInstance && mapInstance.invalidateSize(), 200);
 }
 
-// ── List ─────────────────────────────────────────────────
+// ── Map markers ──────────────────────────────────────────
+function renderUserMarker(lat, lng) {
+  if (userMarker) userMarker.remove();
+  const icon = L.divIcon({
+    html: `<div style="width:18px;height:18px;background:#2563eb;border:3px solid white;border-radius:50%;box-shadow:0 2px 8px rgba(37,99,235,0.4)"></div>`,
+    className: '', iconAnchor: [9, 9]
+  });
+  userMarker = L.marker([lat, lng], { icon }).addTo(mapInstance).bindPopup('<b>📍 ตำแหน่งของคุณ</b>');
+}
+
+function renderStoreMarkers(nearby) {
+  markers.forEach(m => m.remove());
+  markers = nearby.map((s, i) => {
+    const icon = L.divIcon({
+      html: `<div style="background:#1a8a5a;color:white;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;border:2.5px solid white;box-shadow:0 2px 8px rgba(26,138,90,0.35)">${i+1}</div>`,
+      className: '', iconAnchor: [14, 14]
+    });
+    const lines = [
+      `<b>${s.name}</b>`,
+      `📏 ${formatDist(s.dist)}`,
+    ];
+    if (s.area)     lines.push(`📌 ${s.area}`);
+    if (s.type)     lines.push(`🏪 ${s.type}`);
+    if (s.status)   lines.push(`⭕ ${s.status}`);
+    if (s.wage)     lines.push(`💰 ${s.wage}`);
+    if (s.worktime) lines.push(`🕐 ${s.worktime}`);
+    return L.marker([s.lat, s.lng], { icon }).addTo(mapInstance).bindPopup(lines.join('<br>'));
+  });
+}
+
+// ── Store list ───────────────────────────────────────────
+function statusColor(status) {
+  const s = (status || '').toLowerCase();
+  if (s.includes('ว่าง') || s.includes('open') || s.includes('available')) return 'tag-status-open';
+  if (s.includes('เต็ม') || s.includes('full') || s.includes('close')) return 'tag-status-full';
+  return 'tag-status-other';
+}
+
 function renderList(nearby) {
   const el = document.getElementById('store-list');
   if (nearby.length === 0) {
-    el.innerHTML = `<p style="font-size:13px;color:var(--text-3);text-align:center;padding:1.5rem 0">ไม่พบร้านค้าในรัศมีที่กำหนด<br>ลองเพิ่มรัศมีการค้นหา</p>`;
+    el.innerHTML = `<div style="text-align:center;padding:2rem 1rem;color:#8a96a3;font-size:13px">ไม่พบร้านค้าในรัศมีที่กำหนด<br>ลองเพิ่มรัศมีการค้นหา</div>`;
     return;
   }
 
   el.innerHTML = nearby.slice(0, 50).map((s, i) => {
-    const color = COLORS[i % COLORS.length];
-    const meta  = [s.type, s.province, s.district].filter(Boolean).join(' · ');
-    return `<div class="store-row" onclick="focusMarker(${i})">
-      <div class="store-num" style="background:${color}22;color:${color}">${i+1}</div>
-      <div style="flex:1;min-width:0">
-        <div class="store-name">${s.name}</div>
-        ${meta ? `<div class="store-meta">${meta}</div>` : ''}
+    const tagArea   = s.area   ? `<span class="tag tag-area">${s.area}</span>` : '';
+    const tagType   = s.type   ? `<span class="tag tag-gray">${s.type}</span>` : '';
+    const tagStatus = s.status ? `<span class="tag ${statusColor(s.status)}">${s.status}</span>` : '';
+
+    return `<div class="store-card" onclick="focusMarker(${i})">
+      <div class="store-card-top">
+        <div class="store-num">${i+1}</div>
+        <div class="store-name">${s.name}${s.id ? `<span class="store-id">${s.id}</span>` : ''}</div>
+        <div class="store-dist">${formatDist(s.dist)}</div>
       </div>
-      <div class="store-dist" style="color:${color}">${formatDist(s.dist)}</div>
+      <div class="store-tags">
+        ${tagArea}${tagType}${tagStatus}
+      </div>
+      <div class="store-meta-grid">
+        <div class="meta-item">
+          <div class="meta-label">อัตราจ้าง</div>
+          <div class="meta-value">${s.wage || '-'}</div>
+        </div>
+        <div class="meta-item">
+          <div class="meta-label">วันทำงาน</div>
+          <div class="meta-value">${s.workday || '-'}</div>
+        </div>
+        <div class="meta-item">
+          <div class="meta-label">เวลาทำงาน</div>
+          <div class="meta-value">${s.worktime || '-'}</div>
+        </div>
+      </div>
     </div>`;
   }).join('');
 
   if (nearby.length > 50) {
-    el.innerHTML += `<p style="font-size:11px;color:var(--text-3);text-align:center;padding:8px 0">แสดง 50 จาก ${nearby.length} ร้าน</p>`;
+    el.innerHTML += `<div style="text-align:center;font-size:12px;color:#8a96a3;padding:10px">แสดง 50 จาก ${nearby.length} รายการ</div>`;
   }
 }
 
@@ -233,10 +332,3 @@ function focusMarker(i) {
     markers[i].openPopup();
   }
 }
-
-function formatDist(km) {
-  return km < 1 ? `${Math.round(km * 1000)} ม.` : `${km.toFixed(2)} กม.`;
-}
-
-// ── Init ─────────────────────────────────────────────────
-window.addEventListener('DOMContentLoaded', fetchSheet);
