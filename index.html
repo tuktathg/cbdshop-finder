@@ -61,20 +61,15 @@
       </div>
 
       <div class="sidebar-section">
-        <div class="section-header clickable" onclick="toggleDataPanel()">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
-          ข้อมูลร้านค้า
-          <span id="data-arrow" class="arrow">▾</span>
-          <span id="data-count-badge" class="mini-badge hidden"></span>
+        <div class="radius-row">
+          <label>รัศมีค้นหา</label>
+          <input type="range" id="radius-slider" min="1" max="100" value="10" step="1"
+            oninput="document.getElementById('radius-out').textContent=this.value+' กม.'" />
+          <span id="radius-out">10 กม.</span>
         </div>
-        <div id="data-panel">
-          <div class="radius-row">
-            <label>รัศมีค้นหา</label>
-            <input type="range" id="radius-slider" min="1" max="100" value="10" step="1"
-              oninput="document.getElementById('radius-out').textContent=this.value+' กม.'" />
-            <span id="radius-out">10 กม.</span>
-          </div>
+        <div id="load-status" class="status-msg"></div>
       </div>
+
       <div class="sidebar-section results-section" id="results-section" style="display:none">
         <div class="section-header">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/></svg>
