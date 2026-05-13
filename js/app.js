@@ -64,9 +64,11 @@ function setStatus(id, msg, type) {
 }
 function showLoadBar(pct) {
   const bar = document.getElementById('load-bar');
+  if (!bar) return;
   if (pct === null) { bar.classList.add('hidden'); return; }
   bar.classList.remove('hidden');
-  document.getElementById('load-bar-inner').style.width = pct + '%';
+  const inner = document.getElementById('load-bar-inner');
+  if (inner) inner.style.width = pct + '%';
 }
 function haversine(lat1, lng1, lat2, lng2) {
   const R = 6371, dLat = (lat2-lat1)*Math.PI/180, dLng = (lng2-lng1)*Math.PI/180;
@@ -116,16 +118,53 @@ async function fetchDriving(uLat, uLng, targets) {
 }
 
 // ── Sheet ─────────────────────────────────────────────────
-async function fetchSheet() {
-  showLoadBar(20); setStatus('load-status', 'กำลังดึงข้อมูล...', '');
-  try {
-    const res = await fetch(CSV_URL);
-    showLoadBar(70);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const text = await res.text();
-    showLoadBar(100); setTimeout(() => showLoadBar(null), 500);
-    processCSV(text);
-  } catch(e) { showLoadBar(null); setStatus('load-status', `โหลดไม่ได้: ${e.message}`, 'err'); }
+let fetchPromise = null;
+
+async function fetchSheet(retry = 3) {
+  showLoadBar(10);
+  setStatus('load-status', 'กำลังดึงข้อมูล...', '');
+  hideRetryBtn();
+
+  for (let attempt = 1; attempt <= retry; attempt++) {
+    try {
+      showLoadBar(20 + attempt * 20);
+      const res = await fetch(CSV_URL); // bust cache
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const text = await res.text();
+      if (!text || text.trim().startsWith('<')) throw new Error('ได้รับ HTML แทน CSV — Sheet อาจยังไม่ Public');
+      showLoadBar(100);
+      setTimeout(() => showLoadBar(null), 500);
+      processCSV(text);
+      return; // success
+    } catch(e) {
+      if (attempt < retry) {
+        setStatus('load-status', `ลองใหม่ครั้งที่ ${attempt}/${retry}...`, '');
+        await new Promise(r => setTimeout(r, 1500 * attempt));
+      } else {
+        showLoadBar(null);
+        setStatus('load-status', `โหลดไม่ได้: ${e.message}`, 'err');
+        showRetryBtn();
+      }
+    }
+  }
+}
+
+function showRetryBtn() {
+  let btn = document.getElementById('retry-btn');
+  if (!btn) {
+    btn = document.createElement('button');
+    btn.id = 'retry-btn';
+    btn.className = 'btn-retry';
+    btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg> โหลดข้อมูลใหม่';
+    btn.onclick = () => fetchSheet();
+    const el = document.getElementById('load-status');
+    el.parentNode.insertBefore(btn, el.nextSibling);
+  }
+  btn.style.display = 'inline-flex';
+}
+function hideRetryBtn() {
+  const btn = document.getElementById('retry-btn');
+  if (btn) btn.style.display = 'none';
 }
 function parseCSV() {
   const raw = document.getElementById('csv-input').value.trim();
@@ -285,7 +324,10 @@ function searchFromInput() {
   doSearch(p[0], p[1]);
 }
 async function doSearch(uLat, uLng) {
-  if (!stores.length) { setStatus('search-status', 'กรุณาโหลดข้อมูลก่อน', 'err'); return; }
+  if (!stores.length) {
+    setStatus('search-status', 'ข้อมูลยังโหลดไม่สำเร็จ — กรุณากด "โหลดข้อมูลใหม่" ในแถบด้านล่าง', 'err');
+    return;
+  }
   const radius = parseInt(document.getElementById('radius-slider').value);
 
   const cands = stores
