@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ระบบค้นหาพิกัดใกล้เคียง</title>
+  <title>ระบบค้นหาร้านค้า</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -11,97 +11,144 @@
 </head>
 <body>
 
+  <!-- Icon bar -->
   <nav class="icon-bar">
     <div class="icon-bar-logo">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
     </div>
-    <button class="icon-btn active" title="ค้นหา">
+    <button class="icon-btn" id="nav-map" onclick="switchTab('map')" title="ค้นหาพิกัดใกล้เคียง">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5"/></svg>
     </button>
-    <button class="icon-btn" title="ค้นหาข้อความ">
+    <button class="icon-btn active" id="nav-search" onclick="switchTab('search')" title="ค้นหาร้านค้า">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
     </button>
     <button class="icon-btn" title="แจ้งเตือน">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
     </button>
-    <button class="icon-btn sidebar-toggle" title="ย่อ/ขยาย" onclick="toggleSidebar()">
+    <button class="icon-btn sidebar-toggle" onclick="toggleSidebar()" title="ย่อ/ขยาย">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" id="toggle-icon"><polyline points="15 18 9 12 15 6"/></svg>
     </button>
   </nav>
 
-  <div class="map-wrap">
-    <div class="map-header">
-      <span class="map-title">ระบบค้นหาพิกัดใกล้เคียง</span>
-      <span id="total-badge" class="total-badge hidden"></span>
+  <!-- ════ TAB: MAP ════ -->
+  <div id="tab-map" class="tab-content" style="display:none">
+    <div class="map-wrap">
+      <div class="map-header">
+        <span class="map-title">ระบบค้นหาพิกัดใกล้เคียง</span>
+        <span id="total-badge" class="total-badge hidden"></span>
+      </div>
+      <div id="map"></div>
     </div>
-    <div id="map"></div>
+    <aside class="sidebar" id="sidebar-map">
+      <div class="sidebar-section">
+        <div class="section-header">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+          ระบุตำแหน่งของคุณ
+        </div>
+        <label class="input-label">พิกัด (Lat,Lng)</label>
+        <div class="coord-input-wrap">
+          <input type="text" id="coord-input" placeholder="13.6951042,100.4990..." />
+          <button class="coord-clear" onclick="clearCoord()">✕</button>
+        </div>
+        <div class="btn-group">
+          <button class="btn-search" onclick="searchFromInput()">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            ค้นหาพิกัด
+          </button>
+          <button class="btn-locate" onclick="useMyLocation()">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M1 12h4M19 12h4"/></svg>
+            ตำแหน่งปัจจุบัน
+          </button>
+        </div>
+        <div id="search-status" class="status-msg"></div>
+      </div>
+      <div class="sidebar-section">
+        <div class="section-header clickable" onclick="toggleDataPanel()">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+          ข้อมูลร้านค้า
+          <span id="data-arrow" class="arrow">▾</span>
+          <span id="data-count-badge" class="mini-badge hidden"></span>
+        </div>
+        <div id="data-panel">
+          <div class="radius-row">
+            <label>รัศมีค้นหา</label>
+            <input type="range" id="radius-slider" min="1" max="100" value="10" step="1"
+              oninput="document.getElementById('radius-out').textContent=this.value+' กม.'" />
+            <span id="radius-out">10 กม.</span>
+          </div>
+          <div class="btn-row-small">
+            <button class="btn-sm btn-sm-primary" onclick="fetchSheet()">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
+              โหลด Google Sheet
+            </button>
+            <button class="btn-sm" onclick="toggleManual()">วาง CSV</button>
+          </div>
+          <div id="load-bar" class="load-bar hidden"><div id="load-bar-inner"></div></div>
+          <div id="load-status" class="status-msg"></div>
+          <div id="manual-panel" class="hidden">
+            <textarea id="csv-input" rows="4" placeholder="วาง CSV ที่นี่..."></textarea>
+            <button class="btn-sm btn-sm-primary" onclick="parseCSV()" style="margin-top:6px">โหลดจาก CSV</button>
+          </div>
+        </div>
+      </div>
+      <div class="sidebar-section results-section" id="results-section" style="display:none">
+        <div class="section-header">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/></svg>
+          <span id="result-label">พิกัดในรัศมี</span>
+          <span id="result-count" class="result-count-badge"></span>
+        </div>
+        <div id="store-list"></div>
+      </div>
+    </aside>
   </div>
 
-  <aside class="sidebar" id="sidebar">
+  <!-- ════ TAB: SEARCH ════ -->
+  <div id="tab-search" class="tab-content search-tab">
+    <div class="search-page">
+      <div class="search-page-header">
+        <span class="map-title">ค้นหาร้านค้า</span>
+        <span id="search-total-badge" class="total-badge hidden"></span>
+      </div>
 
-    <div class="sidebar-section">
-      <div class="section-header">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-        ระบุตำแหน่งของคุณ
+      <div class="search-box-card">
+        <div class="search-box-title">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          ค้นหาร้านค้า
+        </div>
+        <div class="search-filters">
+          <div class="filter-text-wrap">
+            <svg class="filter-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input type="text" id="text-search" placeholder="ค้นหาชื่อร้าน, ประเภทร้าน, พื้นที่..." oninput="filterStores()" />
+          </div>
+          <div class="filter-select-wrap">
+            <svg class="filter-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+            <select id="filter-status" onchange="filterStores()">
+              <option value="">ทุกสถานะ (Status BE)</option>
+            </select>
+          </div>
+          <div class="filter-select-wrap">
+            <svg class="filter-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/></svg>
+            <select id="filter-area" onchange="filterStores()">
+              <option value="">ทุกพื้นที่ (Area/Zone)</option>
+            </select>
+          </div>
+        </div>
       </div>
-      <label class="input-label">พิกัด (Lat,Lng)</label>
-      <div class="coord-input-wrap">
-        <input type="text" id="coord-input" placeholder="13.6951042,100.4990..." />
-        <button class="coord-clear" onclick="clearCoord()">✕</button>
-      </div>
-      <div class="btn-group">
-        <button class="btn-search" onclick="searchFromInput()">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-          ค้นหาพิกัด
-        </button>
-        <button class="btn-locate" onclick="useMyLocation()">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M1 12h4M19 12h4"/></svg>
-          ตำแหน่งปัจจุบัน
-        </button>
-      </div>
-      <div id="search-status" class="status-msg"></div>
-    </div>
 
-    <div class="sidebar-section">
-      <div class="section-header clickable" onclick="toggleDataPanel()">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
-        ข้อมูลร้านค้า
-        <span id="data-arrow" class="arrow">▾</span>
-        <span id="data-count-badge" class="mini-badge hidden"></span>
-      </div>
-      <div id="data-panel">
-        <div class="radius-row">
-          <label>รัศมีค้นหา</label>
-          <input type="range" id="radius-slider" min="1" max="100" value="10" step="1"
-            oninput="document.getElementById('radius-out').textContent=this.value+' กม.'" />
-          <span id="radius-out">10 กม.</span>
+      <div class="search-results-card">
+        <div id="search-results-header" class="search-results-header hidden">
+          <span id="search-result-count" class="search-result-count"></span>
         </div>
-        <div class="btn-row-small">
-          <button class="btn-sm btn-sm-primary" onclick="fetchSheet()">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
-            โหลด Google Sheet
-          </button>
-          <button class="btn-sm" onclick="toggleManual()">วาง CSV</button>
-        </div>
-        <div id="load-bar" class="load-bar hidden"><div id="load-bar-inner"></div></div>
-        <div id="load-status" class="status-msg"></div>
-        <div id="manual-panel" class="hidden">
-          <textarea id="csv-input" rows="4" placeholder="วาง CSV ที่นี่..."></textarea>
-          <button class="btn-sm btn-sm-primary" onclick="parseCSV()" style="margin-top:6px">โหลดจาก CSV</button>
+        <div id="search-result-list">
+          <div class="empty-state">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#d1d5db" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <div class="empty-title">ไม่พบข้อมูลร้านค้า</div>
+            <div class="empty-sub">ลองเปลี่ยนคำค้นหาใหม่อีกครั้ง</div>
+          </div>
         </div>
       </div>
     </div>
-
-    <div class="sidebar-section results-section" id="results-section" style="display:none">
-      <div class="section-header">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/></svg>
-        <span id="result-label">พิกัดในรัศมี</span>
-        <span id="result-count" class="result-count-badge"></span>
-      </div>
-      <div id="store-list"></div>
-    </div>
-
-  </aside>
+  </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
