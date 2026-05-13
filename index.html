@@ -74,22 +74,7 @@
               oninput="document.getElementById('radius-out').textContent=this.value+' กม.'" />
             <span id="radius-out">10 กม.</span>
           </div>
-          <div class="btn-row-small">
-            <button class="btn-sm btn-sm-primary" id="btn-fetch" onclick="fetchSheet()">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
-              โหลด Google Sheet
-            </button>
-            <button class="btn-sm" onclick="toggleManual()">วาง CSV</button>
-          </div>
-          <div id="load-bar" class="load-bar hidden"><div id="load-bar-inner"></div></div>
-          <div id="load-status" class="status-msg"></div>
-          <div id="manual-panel" class="hidden">
-            <textarea id="csv-input" rows="4" placeholder="วาง CSV ที่นี่..."></textarea>
-            <button class="btn-sm btn-sm-primary" onclick="parseCSV()" style="margin-top:6px">โหลดจาก CSV</button>
-          </div>
-        </div>
       </div>
-
       <div class="sidebar-section results-section" id="results-section" style="display:none">
         <div class="section-header">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/></svg>
