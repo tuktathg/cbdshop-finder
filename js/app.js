@@ -169,7 +169,7 @@ function cacheKey(a,b,c,d){return`${a},${b}|${c},${d}`;}
 function clearCoord(){const e=$('coord-input');if(e)e.value='';setStatus('search-status','','');}
 function openMaps(lat,lng,name){const q=(lat&&lng)?`${lat},${lng}`:encodeURIComponent(name||'');if(q)window.open(`https://www.google.com/maps/search/?api=1&query=${q}`,'_blank');}
 
-function statusColor(v){v=(v||'').toLowerCase();if(v.includes('ว่าง')||v.includes('open'))return'tag-status-open';if(v.includes('เต็ม')||v.includes('full'))return'tag-status-full';return'tag-status-other';}
+function statusColor(v){v=(v||'').toLowerCase();if(v.includes('ทำงานอยู่')||v.includes('working')||v.includes('active'))return'tag-status-open';if(v.includes('สรรหา')||v.includes('recruit')||v.includes('hiring'))return'tag-status-full';return'tag-status-other';}
 
 function cardHTML(s,i,distKm,durSec,isMap){
   const tagArea=s.area?`<span class="tag tag-area">${s.area}</span>`:'';
